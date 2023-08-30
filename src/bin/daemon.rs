@@ -1,16 +1,19 @@
 use std::{error::Error, fs, io, path::Path, time::Duration};
 
 use env_logger::Env;
-use image::{io::Reader as ImageReader, GenericImageView};
+use image::DynamicImage;
 use reqwest::ClientBuilder;
 use rumqttc::{AsyncClient, MqttOptions, QoS};
 use serde::Deserialize;
 use tokio::task;
 
+const SIZES: [(u32, u32); 2] = [(32, 32), (128, 128)];
+
 #[derive(Debug, Deserialize)]
 struct Config {
     pub emoji_directory: String,
     pub firebase_url: String,
+    pub mqtt_client_id: String,
     pub mqtt_server: String,
     pub mqtt_port: u16,
 }
@@ -27,9 +30,12 @@ struct Payload {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("daemon=debug")).init();
+
     let config: Config = toml::from_str(&fs::read_to_string("config.toml")?)?;
-    let mut mqttoptions = MqttOptions::new("rumqtt-sync", config.mqtt_server, config.mqtt_port);
+
+    let mut mqttoptions =
+        MqttOptions::new(config.mqtt_client_id, config.mqtt_server, config.mqtt_port);
     mqttoptions.set_max_packet_size(usize::MAX, usize::MAX);
     mqttoptions.set_keep_alive(Duration::from_secs(5));
 
@@ -74,15 +80,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     continue;
                 };
 
-                mqtt_client
-                    .publish(format!("ledmoji/128x128"), QoS::AtLeastOnce, true, img)
-                    .await?;
+                for (width, height) in SIZES {
+                    let out = img
+                        .resize(width, height, image::imageops::FilterType::Nearest)
+                        .to_rgb8()
+                        .to_vec();
+                    let topic = format!("ledmoji/{}x{}", width, height);
+                    mqtt_client
+                        .publish(topic, QoS::AtLeastOnce, true, out)
+                        .await?;
+                }
             }
         }
     }
 }
 
-fn load_emoji_image(emoji_directory: &str, emoji: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+fn load_emoji_image(emoji_directory: &str, emoji: &str) -> Result<DynamicImage, Box<dyn Error>> {
     let unicode = emoji
         .escape_unicode()
         .to_string()
@@ -96,13 +109,14 @@ fn load_emoji_image(emoji_directory: &str, emoji: &str) -> Result<Vec<u8>, Box<d
         filename = emoji_directory.to_string() + "/" + previous_unicode + ".png";
     }
 
-    let img = ImageReader::open(filename)?
-        .decode()?
-        .resize(128, 128, image::imageops::FilterType::Nearest)
-        .pixels()
-        .flat_map(|(_, _, rgba)| vec![rgba[0], rgba[1], rgba[2]])
-        .collect::<Vec<_>>();
-    Ok(img)
+    Ok(image::open(filename)?)
+    // let img = image::open(filename)?;
+    //     .decode()?
+    //     .resize(128, 128, image::imageops::FilterType::Nearest)
+    //     .pixels()
+    //     .flat_map(|(_, _, rgba)| vec![rgba[0], rgba[1], rgba[2]])
+    //     .collect::<Vec<_>>();
+    // Ok(img)
 }
 
 fn parse_chunk_line(input: &str) -> io::Result<(&str, &str)> {
