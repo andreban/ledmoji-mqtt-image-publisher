@@ -1,4 +1,4 @@
-use std::{error::Error, fs, io, path::Path, time::Duration};
+use std::{error::Error, fs, io, path::Path, thread, time::Duration};
 
 use env_logger::Env;
 use image::DynamicImage;
@@ -62,7 +62,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             continue;
         };
 
-        while let Some(chunk) = response.chunk().await? {
+        loop {
+            let Ok(chunk) = response.chunk().await else {
+                log::error!("Failed to get chunk");
+                break;
+            };
+
+            let Some(chunk) = chunk else {
+                log::error!("Chunk is empty");
+                continue;
+            };
+
             let chunk_vec = chunk.to_vec();
             let chunk_str = String::from_utf8_lossy(&chunk_vec);
             let lines = chunk_str.lines().collect::<Vec<_>>();
@@ -89,6 +99,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     mqtt_client
                         .publish(topic, QoS::AtLeastOnce, true, out)
                         .await?;
+                    thread::sleep(Duration::from_millis(100));
                 }
             }
         }
