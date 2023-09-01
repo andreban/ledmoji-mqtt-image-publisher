@@ -44,8 +44,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Spawn a task to run the eventloop and ensure tasks progress.
     task::spawn(async move {
         loop {
-            let notification = eventloop.poll().await.unwrap();
-            log::info!("Notification = {:?}", notification);
+            let notification = eventloop.poll().await;
+            match notification {
+                Ok(notification) => log::info!("Notification = {:?}", notification),
+                Err(e) => log::error!("Error = {:?}", e),
+            }
         }
     });
 
