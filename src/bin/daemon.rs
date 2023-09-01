@@ -94,9 +94,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .to_rgb8()
                         .to_vec();
                     let topic = format!("ledmoji/{}x{}", width, height);
-                    mqtt_client
-                        .publish(topic, QoS::AtLeastOnce, true, out)
-                        .await?;
+                    let result = mqtt_client
+                        .publish(&topic, QoS::AtLeastOnce, true, out)
+                        .await;
+                    match result {
+                        Ok(_) => log::info!("Published {emoji} to {topic}"),
+                        Err(e) => log::error!("Failed to publish {} to {}: {}", emoji, topic, e),
+                    };
                     thread::sleep(Duration::from_millis(100));
                 }
             }
