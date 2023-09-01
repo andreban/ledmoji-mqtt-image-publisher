@@ -63,14 +63,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         };
 
         loop {
-            let Ok(chunk) = response.chunk().await else {
+            let Ok(Some(chunk)) = response.chunk().await else {
                 log::error!("Failed to get chunk");
                 break;
-            };
-
-            let Some(chunk) = chunk else {
-                log::error!("Chunk is empty");
-                continue;
             };
 
             let chunk_vec = chunk.to_vec();
@@ -121,13 +116,6 @@ fn load_emoji_image(emoji_directory: &str, emoji: &str) -> Result<DynamicImage, 
     }
 
     Ok(image::open(filename)?)
-    // let img = image::open(filename)?;
-    //     .decode()?
-    //     .resize(128, 128, image::imageops::FilterType::Nearest)
-    //     .pixels()
-    //     .flat_map(|(_, _, rgba)| vec![rgba[0], rgba[1], rgba[2]])
-    //     .collect::<Vec<_>>();
-    // Ok(img)
 }
 
 fn parse_chunk_line(input: &str) -> io::Result<(&str, &str)> {
