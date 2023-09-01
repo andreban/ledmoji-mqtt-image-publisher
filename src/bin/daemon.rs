@@ -3,7 +3,7 @@ use std::{error::Error, fs, io, path::Path, thread, time::Duration};
 use env_logger::Env;
 use image::DynamicImage;
 use reqwest::ClientBuilder;
-use rumqttc::{AsyncClient, MqttOptions, QoS};
+use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, Outgoing, QoS};
 use serde::Deserialize;
 use tokio::task;
 
@@ -46,6 +46,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         loop {
             let notification = eventloop.poll().await;
             match notification {
+                Ok(Event::Incoming(Incoming::PingResp) | Event::Outgoing(Outgoing::PingReq)) => {
+                    continue
+                }
                 Ok(notification) => log::info!("Notification = {:?}", notification),
                 Err(e) => log::error!("Error = {:?}", e),
             }
