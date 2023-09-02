@@ -30,7 +30,7 @@ struct Payload {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("daemon=debug")).init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("daemon=info")).init();
 
     let config: Config = toml::from_str(&fs::read_to_string("config.toml")?)?;
 
@@ -78,33 +78,50 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let chunk_str = String::from_utf8_lossy(&chunk_vec);
             let lines = chunk_str.lines().collect::<Vec<_>>();
             if lines.len() < 2 {
-                println!("Not enough lines. Skipping...");
+                log::error!("Not enough lines. Skipping...");
             }
 
-            let (_, command) = parse_chunk_line(lines[0])?;
-            if command == "put" {
-                let (_, data) = parse_chunk_line(lines[1])?;
-                let emoji = serde_json::from_str::<Payload>(data).unwrap().data.emoji;
+            let Ok((_, command)) = parse_chunk_line(lines[0]) else {
+                log::error!("Failed to parse command: {:?}. Skipping...", lines);
+                continue;
+            };
 
-                let Ok(img) = load_emoji_image(&config.emoji_directory, &emoji) else {
-                    log::error!("Failed to load emoji image for {}", emoji);
-                    continue;
-                };
+            match command {
+                "put" => {
+                    log::info!("Received command {}", command);
+                    let (_, data) = parse_chunk_line(lines[1])?;
+                    let emoji = serde_json::from_str::<Payload>(data).unwrap().data.emoji;
 
-                for (width, height) in SIZES {
-                    let out = img
-                        .resize(width, height, image::imageops::FilterType::Nearest)
-                        .to_rgb8()
-                        .to_vec();
-                    let topic = format!("ledmoji/{}x{}", width, height);
-                    let result = mqtt_client
-                        .publish(&topic, QoS::AtLeastOnce, true, out)
-                        .await;
-                    match result {
-                        Ok(_) => log::info!("Published {emoji} to {topic}"),
-                        Err(e) => log::error!("Failed to publish {} to {}: {}", emoji, topic, e),
+                    let Ok(img) = load_emoji_image(&config.emoji_directory, &emoji) else {
+                        log::error!("Failed to load emoji image for {}", emoji);
+                        continue;
                     };
-                    thread::sleep(Duration::from_millis(100));
+
+                    for (width, height) in SIZES {
+                        let out = img
+                            .resize(width, height, image::imageops::FilterType::Nearest)
+                            .to_rgb8()
+                            .to_vec();
+                        let topic = format!("ledmoji/{}x{}", width, height);
+                        let result = mqtt_client
+                            .publish(&topic, QoS::AtLeastOnce, true, out)
+                            .await;
+                        match result {
+                            Ok(_) => log::info!("Published {emoji} to {topic}"),
+                            Err(e) => {
+                                log::error!("Failed to publish {} to {}: {}", emoji, topic, e)
+                            }
+                        };
+                        thread::sleep(Duration::from_millis(100));
+                    }
+                }
+                "keep-alive" => {
+                    log::debug!("Received keep-alive command");
+                    continue;
+                }
+                command => {
+                    log::info!("Ignoring unknown command {}", command);
+                    continue;
                 }
             }
         }
