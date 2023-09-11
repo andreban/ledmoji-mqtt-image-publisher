@@ -160,3 +160,14 @@ fn parse_chunk_line(input: &str) -> io::Result<(&str, &str)> {
 
     Ok(((parts[0]), (parts[1])))
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_parse_chunk_line() {
+        let input = "event: put\ndata: {\"emoji\":\"👍\"}\n\n";
+        let (command, data) = super::parse_chunk_line(input).unwrap();
+        assert_eq!(command, "event");
+        assert_eq!(data, "put\ndata: {\"emoji\":\"👍\"}");
+    }
+}
