@@ -16,7 +16,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let width = img.width();
     let height = img.height();
     let img = img
-        .resize(width, height, image::imageops::FilterType::Nearest)
         .pixels()
         .flat_map(|(_x, _y, rgba)| merge_colors(&rgba, &BACKGROUND_COLOR))
         .collect::<Vec<_>>();
