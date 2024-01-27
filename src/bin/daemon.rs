@@ -1,4 +1,4 @@
-use std::{error::Error, fs, io, path::Path, thread, time::Duration};
+use std::{error::Error, io, path::Path, thread, time::Duration};
 
 use env_logger::Env;
 use image::DynamicImage;
@@ -9,6 +9,19 @@ use tokio::task;
 
 const SIZES: [(u32, u32); 2] = [(32, 32), (128, 128)];
 
+// Path to Noto Emoji font directory (https://github.com/googlefonts/noto-emoji)
+static ENV_EMOJI_DIRECTORY: &str = "EMOJI_DIRECTORY";
+
+// URL to the firebase database record to listen to.
+// eg: 'https://my-firebase-project.firebaseio.com/ledgrids/1.json'
+static ENV_FIREBASE_URL: &str = "FIREBASE_URL";
+
+// MQTT client ID to use.
+static ENV_MQTT_CLIENT_ID: &str = "MQTT_CLIENT_ID";
+static ENV_MQTT_HOST: &str = "MQTT_HOST";
+static ENV_MQTT_PORT: &str = "MQTT_PORT";
+static DEFAULT_MQTT_PORT: u16 = 1883;
+
 #[derive(Debug, Deserialize)]
 struct Config {
     pub emoji_directory: String,
@@ -16,6 +29,31 @@ struct Config {
     pub mqtt_client_id: String,
     pub mqtt_server: String,
     pub mqtt_port: u16,
+}
+
+impl Config {
+    pub fn from_env() -> Result<Self, Box<dyn Error>> {
+        let mqtt_port = match std::env::var(ENV_MQTT_PORT) {
+            Ok(port) => port.parse()?,
+            Err(_) => DEFAULT_MQTT_PORT,
+        };
+
+        Ok(Self {
+            emoji_directory: std::env::var(ENV_EMOJI_DIRECTORY).unwrap_or_else(|_| {
+                panic!("{} environment variable not set", ENV_EMOJI_DIRECTORY);
+            }),
+            firebase_url: std::env::var(ENV_FIREBASE_URL).unwrap_or_else(|_| {
+                panic!("{} environment variable not set", ENV_FIREBASE_URL);
+            }),
+            mqtt_client_id: std::env::var(ENV_MQTT_CLIENT_ID).unwrap_or_else(|_| {
+                panic!("{} environment variable not set", ENV_MQTT_CLIENT_ID);
+            }),
+            mqtt_server: std::env::var(ENV_MQTT_HOST).unwrap_or_else(|_| {
+                panic!("{} environment variable not set", ENV_MQTT_HOST);
+            }),
+            mqtt_port: mqtt_port,
+        })
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -32,7 +70,7 @@ struct Payload {
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("daemon=info")).init();
 
-    let config: Config = toml::from_str(&fs::read_to_string("config.toml")?)?;
+    let config: Config = Config::from_env()?;
 
     let mut mqttoptions =
         MqttOptions::new(config.mqtt_client_id, config.mqtt_server, config.mqtt_port);

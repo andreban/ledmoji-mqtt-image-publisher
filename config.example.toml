@@ -1,5 +1,0 @@
-emoji_directory = '/path/to/emoji/directory' # Path to Noto Emoji font directory (https://github.com/googlefonts/noto-emoji)
-firebase_url = 'https://my-firebase-project.firebaseio.com/ledgrids/1.json'
-mqtt_client_id = 'client-id'
-mqtt_server = 'mqtt-server.address'
-mqtt_port = 1883

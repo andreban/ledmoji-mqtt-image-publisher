@@ -1,0 +1,28 @@
+networks:
+  ledmoji-network:
+
+services:
+  mosquitto: 
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto
+    restart: always
+    ports:
+      - 1883:1883
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    networks:
+      ledmoji-network:
+  ledmoji-daemon:
+    image: andreban/ledmoji-daemon:latest
+    # build: .
+    container_name: ledmoji-daemon
+    restart: always
+    depends_on:
+      - mosquitto
+    environment:
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - MQTT_CLIENT_ID=ledmoji-daemon
+      - FIREBASE_URL=https://emoji-led-matrix-controller-default-rtdb.firebaseio.com/ledgrids/1.json
+    networks:
+      - ledmoji-network
